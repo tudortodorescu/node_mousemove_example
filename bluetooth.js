@@ -1,39 +1,77 @@
-router.post('/connect', function (req, res) {
-    res.render('connect');
+// Connect to a peripheral running the echo service
+// https://github.com/noble/bleno/blob/master/examples/echo
 
-    const bluetooth = require('node-bluetooth');
-    const device = new bluetooth.DeviceINQ();
+// subscribe to be notified when the value changes
+// start an interval to write data to the characteristic
 
-    // Find devices
-    device
-        .on('finished', console.log.bind(console, 'finished'))
-        .on('found', function found(address, name) {
-            console.log('Found: ' + address + ' with name ' + name);
+const noble = require('noble');
+// const noble = require('');
 
-            // We know our Arduino bluetooth module is called 'HC-05', so we only want to connect to that.
-            if (name === 'HC-05') {
+// const ECHO_SERVICE_UUID = 'ec00';
+// const ECHO_CHARACTERISTIC_UUID = 'ec0e';
 
-                // find serial port channel
-                device.findSerialPortChannel(address, function (channel) {
-                    console.log('Found channel for serial port on %s: ', name, channel);
-
-                    // make bluetooth connect to remote device
-                    bluetooth.connect(address, channel, function (err, connection) {
-                        if (err) return console.error(err);
-
-                        // This is some example code from the library for writing, customize as you wish.
-                        connection.delimiter = Buffer.from('/n', 'utf-8');
-                        connection.on('data', (buffer) => {
-                            console.log('received message: ', buffer.toString());
-                        });
-
-                        // This is some example code from the library for writing, customize as you wish.
-                        connection.write(new Buffer('hello', 'utf-8'), () => {
-                            console.log('wrote');
-                        });
-                    });
-                });
-            }
-        });
-    device.scan();
+noble.on('stateChange', state => {
+  if (state === 'poweredOn') {
+    console.log('Scanning');
+    noble.startScanning();
+    // noble.startScanning([ECHO_SERVICE_UUID]);
+  } else {
+    noble.stopScanning();
+  }
 });
+
+noble.on('discover', peripheral => {
+    // connect to the first peripheral that is scanned
+    noble.stopScanning();
+    const name = peripheral.advertisement.localName;
+    console.log(`Connecting to '${name}' ${peripheral.id}`);
+    connectAndSetUp(peripheral);
+});
+
+function connectAndSetUp(peripheral) {
+
+  peripheral.connect(error => {
+    console.log('Connected to', peripheral.id);
+
+    // specify the services and characteristics to discover
+    const serviceUUIDs = [];
+    const characteristicUUIDs = [];
+
+    peripheral.discoverSomeServicesAndCharacteristics(
+        serviceUUIDs,
+        characteristicUUIDs,
+        onServicesAndCharacteristicsDiscovered
+    );
+  });
+  
+  peripheral.on('disconnect', () => console.log('disconnected'));
+}
+
+function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
+  console.log('Discovered services and characteristics');
+  const echoCharacteristic = characteristics[0];
+  console.log(services)
+
+  // data callback receives notifications
+  echoCharacteristic.on('data', (data, isNotification) => {
+    console.log('Received: "' + data + '"');
+  });
+  
+  // subscribe to be notified whenever the peripheral update the characteristic
+  echoCharacteristic.subscribe(error => {
+    if (error) {
+      console.error('Error subscribing to echoCharacteristic');
+    } else {
+      console.log('Subscribed for echoCharacteristic notifications');
+    }
+  });
+
+  // create an interval to send data to the service
+//   let count = 0;
+//   setInterval(() => {
+//     count++;
+//     const message = new Buffer('hello, ble ' + count, 'utf-8');
+//     console.log("Sending:  '" + message + "'");
+//     echoCharacteristic.write(message);
+//   }, 2500);
+}

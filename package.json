@@ -9,6 +9,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bluetooth-hci-socket": "^0.5.1",
+    "express": "^4.17.1",
+    "noble": "^1.9.1",
+    "node-web-bluetooth": "^1.2.0",
     "robotjs": "^0.6.0"
   }
 }
